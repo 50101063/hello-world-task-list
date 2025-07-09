@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  database:
+    image: postgres:15-alpine
+    container_name: task_list_db
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ../backend
+    container_name: task_list_backend
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://${DB_USER}:${DB_PASSWORD}@database:5432/${DB_NAME}
+      NODE_ENV: production
+    depends_on:
+      database:
+        condition: service_healthy
+    command: sh -c "npm install && npx knex migrate:latest && npm start"
+    restart: on-failure
+
+  frontend:
+    build: ../frontend
+    container_name: task_list_frontend
+    ports:
+      - "80:80"
+    environment:
+      VITE_API_BASE_URL: http://backend:3000/api
+    depends_on:
+      - backend
+    restart: on-failure
+
+volumes:
+  db_data:
